@@ -56,15 +56,27 @@ function updateTime(data) {
     const settings = data.sections.app_settings;
     const now = new Date();
 
+    // Time options
+    const timeOptions = {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    };
+
+    const selectedTz = settings.selected_timezone?.value;
+    if (selectedTz && selectedTz !== 'Local') {
+        try {
+            timeOptions.timeZone = selectedTz;
+        } catch (e) {
+            console.error('Invalid timezone:', selectedTz);
+        }
+    }
+
     // Update Time
     if (settings.show_time.value !== false) {
         timeEl.style.display = 'inline';
-        timeEl.textContent = now.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-        });
+        timeEl.textContent = now.toLocaleTimeString([], timeOptions);
     } else {
         timeEl.style.display = 'none';
     }
@@ -76,15 +88,18 @@ function updateTime(data) {
 
         let tzString = '';
         try {
-            const parts = new Intl.DateTimeFormat('en-US', {
+            const tzOptions = {
                 timeZoneName: format === 'offset' ? 'shortOffset' : format,
-            }).formatToParts(now);
+            };
+            if (selectedTz && selectedTz !== 'Local') tzOptions.timeZone = selectedTz;
+
+            const parts = new Intl.DateTimeFormat('en-US', tzOptions).formatToParts(now);
 
             const tzPart = parts.find(p => p.type === 'timeZoneName');
             tzString = tzPart ? tzPart.value : '';
         } catch (e) {
             // Fallback for timezone
-            tzString = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            tzString = (selectedTz && selectedTz !== 'Local') ? selectedTz : Intl.DateTimeFormat().resolvedOptions().timeZone;
         }
 
         timezoneEl.textContent = tzString;
