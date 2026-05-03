@@ -1,0 +1,35 @@
+{
+  "app_id": "aigen-1777770509754",
+  "document_version": 1,
+  "sections": {
+    "storefront": {
+      "headline": {
+        "type": "text",
+        "label": "Headline",
+        "value": "Hello World"
+      },
+      "message": {
+        "type": "textarea",
+        "label": "Message",
+        "value": "Welcome to your new Skoop signage application. This is a simple hello world demonstration."
+      }
+    },
+    "app_settings": {
+      "primary_color": {
+        "type": "color",
+        "label": "Primary Color",
+        "value": "#00b7af"
+      },
+      "background_color": {
+        "type": "color",
+        "label": "Background Color",
+        "value": "#10181f"
+      },
+      "text_color": {
+        "type": "color",
+        "label": "Text Color",
+        "value": "#ffffff"
+      }
+    }
+  }
+}
