@@ -32,26 +32,65 @@ async function init() {
     document.querySelector('.message').textContent = storefront.message.value;
 
     // Handle time visibility
-    const timeEl = document.querySelector('.time');
-    if (settings.show_time.value) {
-        timeEl.style.display = 'block';
-        updateTime();
-        setInterval(updateTime, 1000);
+    const timeContainer = document.querySelector('.time-container');
+    const showTime = settings.show_time.value !== false;
+    const showTimezone = settings.show_timezone.value !== false;
+
+    if (showTime || showTimezone) {
+        timeContainer.style.display = 'flex';
+        updateTime(data);
+        setInterval(() => updateTime(data), 1000);
     } else {
-        timeEl.style.display = 'none';
+        timeContainer.style.display = 'none';
     }
 
     // Reveal the app
     document.getElementById('app-container').classList.add('loaded');
 }
 
-function updateTime() {
+function updateTime(data) {
     const timeEl = document.querySelector('.time');
-    if (!timeEl) return;
+    const timezoneEl = document.querySelector('.timezone');
+    if (!timeEl || !timezoneEl) return;
 
+    const settings = data.sections.app_settings;
     const now = new Date();
-    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    timeEl.textContent = timeString;
+
+    // Update Time
+    if (settings.show_time.value !== false) {
+        timeEl.style.display = 'inline';
+        timeEl.textContent = now.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        });
+    } else {
+        timeEl.style.display = 'none';
+    }
+
+    // Update Timezone
+    if (settings.show_timezone.value !== false) {
+        timezoneEl.style.display = 'inline';
+        const format = settings.timezone_format?.value || 'short';
+
+        let tzString = '';
+        try {
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZoneName: format === 'offset' ? 'shortOffset' : format,
+            }).formatToParts(now);
+
+            const tzPart = parts.find(p => p.type === 'timeZoneName');
+            tzString = tzPart ? tzPart.value : '';
+        } catch (e) {
+            // Fallback for timezone
+            tzString = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        }
+
+        timezoneEl.textContent = tzString;
+    } else {
+        timezoneEl.style.display = 'none';
+    }
 }
 
 // Start the app

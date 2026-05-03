@@ -34,6 +34,23 @@
         "type": "boolean",
         "label": "Show Time",
         "value": true
+      },
+      "show_timezone": {
+        "type": "boolean",
+        "label": "Show Timezone",
+        "value": true
+      },
+      "timezone_format": {
+        "type": "enum",
+        "label": "Timezone Format",
+        "value": "short",
+        "meta": {
+          "options": [
+            "short",
+            "long",
+            "offset"
+          ]
+        }
       }
     }
   }
