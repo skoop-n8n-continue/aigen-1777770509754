@@ -18,12 +18,12 @@
       "primary_color": {
         "type": "color",
         "label": "Primary Color",
-        "value": "#e53e3e"
+        "value": "#22c55e"
       },
       "background_color": {
         "type": "color",
         "label": "Background Color",
-        "value": "#1a0505"
+        "value": "#051a0a"
       },
       "text_color": {
         "type": "color",
