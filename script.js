@@ -31,8 +31,27 @@ async function init() {
     document.querySelector('.headline').textContent = storefront.headline.value;
     document.querySelector('.message').textContent = storefront.message.value;
 
+    // Handle time visibility
+    const timeEl = document.querySelector('.time');
+    if (settings.show_time.value) {
+        timeEl.style.display = 'block';
+        updateTime();
+        setInterval(updateTime, 1000);
+    } else {
+        timeEl.style.display = 'none';
+    }
+
     // Reveal the app
     document.getElementById('app-container').classList.add('loaded');
+}
+
+function updateTime() {
+    const timeEl = document.querySelector('.time');
+    if (!timeEl) return;
+
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    timeEl.textContent = timeString;
 }
 
 // Start the app

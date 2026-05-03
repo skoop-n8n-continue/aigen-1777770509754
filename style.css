@@ -48,4 +48,11 @@ body {
     max-width: 800px;
     line-height: 1.4;
     opacity: 0.9;
+    margin-bottom: 2rem;
+}
+
+.time {
+    font-size: 3.5rem;
+    font-weight: 300;
+    color: var(--primary-color);
 }

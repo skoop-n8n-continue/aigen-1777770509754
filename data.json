@@ -29,6 +29,11 @@
         "type": "color",
         "label": "Text Color",
         "value": "#ffffff"
+      },
+      "show_time": {
+        "type": "boolean",
+        "label": "Show Time",
+        "value": true
       }
     }
   }
