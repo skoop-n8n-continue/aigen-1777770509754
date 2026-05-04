@@ -18,7 +18,7 @@
       "primary_color": {
         "type": "color",
         "label": "Primary Color",
-        "value": "#fbbf24"
+        "value": "#696354"
       },
       "background_color": {
         "type": "color",
@@ -28,17 +28,17 @@
       "text_color": {
         "type": "color",
         "label": "Text Color",
-        "value": "#ffffff"
+        "value": "#b1a0a0"
       },
       "show_time": {
         "type": "boolean",
         "label": "Show Time",
-        "value": true
+        "value": false
       },
       "show_timezone": {
         "type": "boolean",
         "label": "Show Timezone",
-        "value": true
+        "value": false
       },
       "timezone_format": {
         "type": "enum",
@@ -55,7 +55,7 @@
       "selected_timezone": {
         "type": "enum",
         "label": "Timezone",
-        "value": "Local",
+        "value": "America/New_York",
         "meta": {
           "options": [
             "Local",
