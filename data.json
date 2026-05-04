@@ -38,12 +38,12 @@
       "show_timezone": {
         "type": "boolean",
         "label": "Show Timezone",
-        "value": false
+        "value": true
       },
       "timezone_format": {
         "type": "enum",
         "label": "Timezone Format",
-        "value": "long",
+        "value": "short",
         "meta": {
           "options": [
             "short",
@@ -55,7 +55,7 @@
       "selected_timezone": {
         "type": "enum",
         "label": "Timezone",
-        "value": "Europe/London",
+        "value": "Asia/Tokyo",
         "meta": {
           "options": [
             "Local",
