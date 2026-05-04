@@ -493,31 +493,44 @@
 
     // ── Visibility safety check ───────────────────────────────────────────────
     // After applying show/hide bindings, verify that each element that should
-    // be visible actually IS visible according to computed style. If not, a
-    // parent element is blocking it (e.g. app's init() set the container to
-    // display:none based on the original data). Since the runtime can't reach
-    // parent elements without a binding, request a full Tier 2 reload from the
-    // builder so the page re-initializes from the dirty data and the app's own
-    // logic sets up correctly (intervals started, containers shown, etc.).
+    // be visible actually IS visible. If not, a parent element is blocking it
+    // (e.g. app's init() set the container to display:none based on the original
+    // data). Since the runtime can't reach parent elements without a binding,
+    // request a full Tier 2 reload from the builder so the page re-initializes
+    // from the dirty data correctly (intervals started, containers shown, etc.).
+    //
+    // Detection: el.offsetParent === null whenever the element OR any ancestor
+    // has display:none. Since applyBindings already set el.style.display='' and
+    // removed hidden on the element itself, offsetParent===null means a PARENT
+    // is blocking it. Exception: position:fixed always has null offsetParent
+    // even when visible — guard with a getComputedStyle(position) check.
+    //
+    // Note: getComputedStyle(el).display is NOT suitable here — it returns the
+    // element's own display value (e.g. "inline"), not parent cascade visibility.
+    // offsetParent correctly reflects ancestor display:none.
     //
     // Only runs on direct postMessage updates (not MutationObserver re-applies).
     // Hiding always succeeds (inline display:none wins over parents), so only
     // "should be shown" elements need the check.
     try {
-      if (window.getComputedStyle && window.parent && window.parent !== window) {
+      if (window.parent && window.parent !== window) {
         var sections = payload.sections || payload;
         var showEls = document.querySelectorAll('[data-bind-show]');
         for (var iV = 0; iV < showEls.length; iV++) {
           var elV = showEls[iV];
           var valV = readPath(sections, elV.getAttribute('data-bind-show'));
           var shouldShowV = !(valV === 'false' || valV === false || valV === 0 || valV === null || valV === undefined);
-          if (shouldShowV && window.getComputedStyle(elV).display === 'none') {
-            // Element should be visible but computed style disagrees — parent blocking it
-            window.parent.postMessage({ type: 'skoop:request_tier2' }, '*');
-            break; // one request is enough; the reload will fix all elements
+          if (shouldShowV && elV.offsetParent === null) {
+            // offsetParent===null on a "should show" element means an ancestor has
+            // display:none. Exclude position:fixed (legitimate null offsetParent).
+            var csV = window.getComputedStyle ? window.getComputedStyle(elV) : null;
+            if (!csV || (csV.display !== 'none' && csV.position !== 'fixed')) {
+              window.parent.postMessage({ type: 'skoop:request_tier2' }, '*');
+              break; // one request is enough; the reload will fix all elements
+            }
           }
         }
       }
-    } catch (_) { /* getComputedStyle or postMessage unavailable — skip check */ }
+    } catch (_) { /* offsetParent or postMessage unavailable — skip check */ }
   });
 })();
