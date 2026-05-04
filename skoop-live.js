@@ -229,6 +229,37 @@
       }
     }
 
+    // Collect every unique path actually present in data-bind-* attributes so
+    // we can ACK the parent with the full set of covered paths after applying.
+    // This drives automatic Tier 2 fallback in the configurator: if a changed
+    // path was not in the ACK set, no binding existed for it, so the configurator
+    // triggers a srcdoc reload instead of leaving the preview stale.
+    var coveredPaths = {};
+    var allBound = document.querySelectorAll('[data-bind-text],[data-bind-html],[data-bind-currency],[data-bind-number],[data-bind-percent],[data-bind-src],[data-bind-href],[data-bind-bg-image],[data-bind-color],[data-bind-bg-color],[data-bind-border-color],[data-bind-show],[data-bind-hide],[data-bind-class]');
+    for (var iCov = 0; iCov < allBound.length; iCov++) {
+      var elCov = allBound[iCov];
+      var attrs = ['data-bind-text','data-bind-html','data-bind-currency','data-bind-number','data-bind-percent','data-bind-src','data-bind-href','data-bind-bg-image','data-bind-color','data-bind-bg-color','data-bind-border-color','data-bind-show','data-bind-hide','data-bind-class'];
+      for (var iA2 = 0; iA2 < attrs.length; iA2++) {
+        var av = elCov.getAttribute(attrs[iA2]);
+        if (av) coveredPaths[av.trim()] = true;
+      }
+    }
+    // data-bind-attr and data-bind-style have comma-separated "key:path" pairs
+    var multiBindAttrs = ['data-bind-attr','data-bind-style'];
+    var allMulti = document.querySelectorAll('[data-bind-attr],[data-bind-style]');
+    for (var iMul = 0; iMul < allMulti.length; iMul++) {
+      for (var iMb = 0; iMb < multiBindAttrs.length; iMb++) {
+        var mbVal = allMulti[iMul].getAttribute(multiBindAttrs[iMb]);
+        if (!mbVal) continue;
+        var mbPairs = mbVal.split(',');
+        for (var iMp = 0; iMp < mbPairs.length; iMp++) {
+          var mbPair = mbPairs[iMp].trim();
+          var mbColon = mbPair.indexOf(':');
+          if (mbColon >= 0) coveredPaths[mbPair.slice(mbColon + 1).trim()] = true;
+        }
+      }
+    }
+
     // arbitrary attributes — "key:path, key2:path2"
     nodeList = document.querySelectorAll('[data-bind-attr]');
     for (var iF = 0; iF < nodeList.length; iF++) {
@@ -276,6 +307,21 @@
         } catch (_) { /* invalid property names silently ignored */ }
       }
     }
+    // Send ACK to parent window with the set of data paths covered by
+    // data-bind-* attributes. The configurator uses this to decide whether
+    // a Tier 2 reload is needed: if the just-changed path is not in the
+    // covered set, no binding existed for it and a reload is triggered.
+    // The ACK also carries a msgId echoed from the incoming message so the
+    // configurator can match it to the pending broadcast.
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'skoop:config_ack',
+          paths: Object.keys(coveredPaths),
+          msgId: window.__skoop_last_msg_id__ || null,
+        }, '*');
+      }
+    } catch (_) { /* cross-origin parent — ACK silently dropped */ }
   }
 
   // Public API
@@ -323,6 +369,8 @@
     if (e.data.type !== 'skoop:config_update') return;
     var payload = e.data.data;
     if (!payload) return;
+    // Store msgId so applyBindings can echo it in the ACK
+    window.__skoop_last_msg_id__ = e.data.msgId || null;
     window.SkoopLive.apply(payload);
   });
 })();
