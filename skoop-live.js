@@ -37,6 +37,84 @@
 (function () {
   if (window.SkoopLive) return; // idempotent — only one runtime per page
 
+  // ── Module-level live-preview state ────────────────────────────────────────
+  // _liveData    — last data document received via postMessage; null on initial load
+  // _applyingLiveData — true while we are writing to the DOM; the MutationObserver
+  //                     callback skips re-entry when this flag is set
+  // _liveObserver — the single MutationObserver instance; created lazily on first
+  //                 postMessage, observes document.body subtree for the entire
+  //                 configurator session
+  var _liveData = null;
+  var _applyingLiveData = false;
+  var _liveObserver = null;
+
+  // All data-bind-* attribute names — used by the observer to decide whether a
+  // mutated element is one we care about.
+  var BIND_ATTRS = [
+    'data-bind-text', 'data-bind-html', 'data-bind-currency', 'data-bind-number',
+    'data-bind-percent', 'data-bind-src', 'data-bind-href', 'data-bind-bg-image',
+    'data-bind-color', 'data-bind-bg-color', 'data-bind-border-color',
+    'data-bind-show', 'data-bind-hide', 'data-bind-class',
+    'data-bind-attr', 'data-bind-style',
+  ];
+
+  // Returns true if el (or a close ancestor) carries any data-bind-* attribute.
+  // We check up to 2 levels up so characterData mutations (which target the text
+  // node, not the element) are mapped back to their bound parent element.
+  function hasBoundElement(node) {
+    var el = (node && node.nodeType === 3) ? node.parentElement : node;
+    for (var depth = 0; depth < 3 && el && el.hasAttribute; depth++, el = el.parentElement) {
+      for (var i = 0; i < BIND_ATTRS.length; i++) {
+        if (el.hasAttribute(BIND_ATTRS[i])) return true;
+      }
+    }
+    return false;
+  }
+
+  // Re-apply bindings from _liveData, guarded against re-entrant calls.
+  // Uses Promise.resolve() to defer clearing the guard past the current
+  // microtask batch — this ensures observer callbacks triggered by our OWN
+  // DOM writes (which are microtasks) see _applyingLiveData = true and skip,
+  // while subsequent app-timer-driven mutations are caught correctly.
+  function reapplyLiveBindings() {
+    if (!_liveData) return;
+    _applyingLiveData = true;
+    try {
+      applyBindings(_liveData.sections || _liveData);
+    } catch (e) {}
+    var clearFlag = function () { _applyingLiveData = false; };
+    if (typeof Promise !== 'undefined') {
+      Promise.resolve().then(clearFlag);
+    } else {
+      setTimeout(clearFlag, 0);
+    }
+  }
+
+  // Create (or no-op if already running) the MutationObserver that watches for
+  // app-timer-driven DOM reversions and immediately re-applies live bindings.
+  // Observes attributes (style, hidden, class, src, href), characterData, and
+  // childList (for textContent replacements which remove + add text nodes).
+  function activateLiveObserver() {
+    if (_liveObserver || typeof MutationObserver === 'undefined') return;
+    _liveObserver = new MutationObserver(function (mutations) {
+      if (_applyingLiveData || !_liveData) return;
+      for (var i = 0; i < mutations.length; i++) {
+        if (hasBoundElement(mutations[i].target)) {
+          reapplyLiveBindings();
+          return; // one re-apply covers all mutations in the batch
+        }
+      }
+    });
+    var root = document.body || document.documentElement;
+    _liveObserver.observe(root, {
+      subtree: true,
+      attributes: true,
+      characterData: true,
+      childList: true,  // needed for textContent replacement (removes then adds text node)
+    });
+  }
+  // ── End MutationObserver setup ──────────────────────────────────────────────
+
   // Resolve a dot-separated path against the sections object. Handles typed
   // field unwrapping (returns .value when the resolved node is a typed field)
   // and collection wrappers (drills into .value array on numeric keys).
@@ -395,6 +473,22 @@
     if (!payload) return;
     // Store msgId so applyBindings can echo it in the ACK
     window.__skoop_last_msg_id__ = e.data.msgId || null;
+    // Store live data so the MutationObserver can re-apply it when the app's
+    // own timer loop reverts our changes (e.g. a clock's setInterval writing
+    // style.display from the original closed-over data object every second).
+    _liveData = payload;
+    // Arm the guard BEFORE applying so observer callbacks triggered by our
+    // own DOM writes (delivered as microtasks) see the flag set and skip.
+    _applyingLiveData = true;
     window.SkoopLive.apply(payload);
+    // Defer clearing the flag past the current microtask batch.
+    var clearFlag = function () { _applyingLiveData = false; };
+    if (typeof Promise !== 'undefined') {
+      Promise.resolve().then(clearFlag);
+    } else {
+      setTimeout(clearFlag, 0);
+    }
+    // Start the observer (no-op if already running).
+    activateLiveObserver();
   });
 })();
