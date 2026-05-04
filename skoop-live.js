@@ -490,5 +490,34 @@
     }
     // Start the observer (no-op if already running).
     activateLiveObserver();
+
+    // ── Visibility safety check ───────────────────────────────────────────────
+    // After applying show/hide bindings, verify that each element that should
+    // be visible actually IS visible according to computed style. If not, a
+    // parent element is blocking it (e.g. app's init() set the container to
+    // display:none based on the original data). Since the runtime can't reach
+    // parent elements without a binding, request a full Tier 2 reload from the
+    // builder so the page re-initializes from the dirty data and the app's own
+    // logic sets up correctly (intervals started, containers shown, etc.).
+    //
+    // Only runs on direct postMessage updates (not MutationObserver re-applies).
+    // Hiding always succeeds (inline display:none wins over parents), so only
+    // "should be shown" elements need the check.
+    try {
+      if (window.getComputedStyle && window.parent && window.parent !== window) {
+        var sections = payload.sections || payload;
+        var showEls = document.querySelectorAll('[data-bind-show]');
+        for (var iV = 0; iV < showEls.length; iV++) {
+          var elV = showEls[iV];
+          var valV = readPath(sections, elV.getAttribute('data-bind-show'));
+          var shouldShowV = !(valV === 'false' || valV === false || valV === 0 || valV === null || valV === undefined);
+          if (shouldShowV && window.getComputedStyle(elV).display === 'none') {
+            // Element should be visible but computed style disagrees — parent blocking it
+            window.parent.postMessage({ type: 'skoop:request_tier2' }, '*');
+            break; // one request is enough; the reload will fix all elements
+          }
+        }
+      }
+    } catch (_) { /* getComputedStyle or postMessage unavailable — skip check */ }
   });
 })();
