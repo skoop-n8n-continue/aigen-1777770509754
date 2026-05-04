@@ -6,29 +6,29 @@
       "headline": {
         "type": "text",
         "label": "Headline",
-        "value": "Hello World"
+        "value": "Hello Worldjbub"
       },
       "message": {
         "type": "textarea",
         "label": "Message",
-        "value": "Welcome to your new Skoop signage application. This is a simple hello world demonstration."
+        "value": "Welcome to your newiijiii Skoop signage application. This is a simple hello world demonstration."
       }
     },
     "app_settings": {
       "primary_color": {
         "type": "color",
         "label": "Primary Color",
-        "value": "#696354"
+        "value": "#cecac0"
       },
       "background_color": {
         "type": "color",
         "label": "Background Color",
-        "value": "#1a0f0a"
+        "value": "#be5423"
       },
       "text_color": {
         "type": "color",
         "label": "Text Color",
-        "value": "#b1a0a0"
+        "value": "#0edd26"
       },
       "show_time": {
         "type": "boolean",
@@ -38,12 +38,12 @@
       "show_timezone": {
         "type": "boolean",
         "label": "Show Timezone",
-        "value": true
+        "value": false
       },
       "timezone_format": {
         "type": "enum",
         "label": "Timezone Format",
-        "value": "short",
+        "value": "long",
         "meta": {
           "options": [
             "short",
@@ -55,7 +55,7 @@
       "selected_timezone": {
         "type": "enum",
         "label": "Timezone",
-        "value": "America/New_York",
+        "value": "Europe/London",
         "meta": {
           "options": [
             "Local",
