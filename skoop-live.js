@@ -72,8 +72,9 @@
   }
 
   function applyColorVariables(sections) {
-    if (!sections || typeof sections !== 'object') return;
+    if (!sections || typeof sections !== 'object') return [];
     var root = document.documentElement;
+    var covered = [];
     for (var sectionKey in sections) {
       var section = sections[sectionKey];
       if (!section || typeof section !== 'object') continue;
@@ -83,9 +84,12 @@
         var field = section[fieldKey];
         if (field && field.type === 'color' && typeof field.value === 'string') {
           root.style.setProperty('--' + kebab(fieldKey), field.value);
+          // Record the full path so the ACK covers these implicit color bindings
+          covered.push(sectionKey + '.' + fieldKey);
         }
       }
     }
+    return covered;
   }
 
   function setSrc(el, value) {
@@ -101,7 +105,7 @@
   function applyBindings(sections) {
     if (!sections) return;
 
-    applyColorVariables(sections);
+    var colorPaths = applyColorVariables(sections);
 
     var nodeList;
 
@@ -195,22 +199,36 @@
       if (typeof vB === 'string') elB.style.borderColor = vB;
     }
 
-    // show — hidden when value is exactly false
+    // show — hidden when value is falsy (false, 0, "", null, undefined)
     nodeList = document.querySelectorAll('[data-bind-show]');
     for (var iC = 0; iC < nodeList.length; iC++) {
       var elC = nodeList[iC];
       var vC = readPath(sections, elC.getAttribute('data-bind-show'));
-      if (vC === false) elC.setAttribute('hidden', '');
-      else elC.removeAttribute('hidden');
+      // Coerce to boolean — catches strict false, string "false", 0, null, undefined
+      var showC = (vC === 'false' || vC === false || vC === 0 || vC === null || vC === undefined) ? false : !!vC;
+      if (!showC) {
+        elC.setAttribute('hidden', '');
+        elC.style.display = 'none';
+      } else {
+        elC.removeAttribute('hidden');
+        elC.style.display = '';
+      }
     }
 
-    // hide — hidden when value is exactly true
+    // hide — hidden when value is truthy (true, 1, "true")
     nodeList = document.querySelectorAll('[data-bind-hide]');
     for (var iD = 0; iD < nodeList.length; iD++) {
       var elD = nodeList[iD];
       var vD = readPath(sections, elD.getAttribute('data-bind-hide'));
-      if (vD === true) elD.setAttribute('hidden', '');
-      else elD.removeAttribute('hidden');
+      // Coerce to boolean — catches strict true, string "true", 1
+      var hideD = (vD === 'true' || vD === true || vD === 1) ? true : false;
+      if (hideD) {
+        elD.setAttribute('hidden', '');
+        elD.style.display = 'none';
+      } else {
+        elD.removeAttribute('hidden');
+        elD.style.display = '';
+      }
     }
 
     // class — adds class "<lastKey>-<value>", removing previous matching variants
@@ -234,7 +252,13 @@
     // This drives automatic Tier 2 fallback in the configurator: if a changed
     // path was not in the ACK set, no binding existed for it, so the configurator
     // triggers a srcdoc reload instead of leaving the preview stale.
+    // Also seed with paths covered implicitly by applyColorVariables (no element
+    // attribute needed for top-level color fields — the runtime writes :root CSS
+    // variables for those automatically, so they should NOT trigger Tier 2).
     var coveredPaths = {};
+    for (var iCol = 0; iCol < colorPaths.length; iCol++) {
+      coveredPaths[colorPaths[iCol]] = true;
+    }
     var allBound = document.querySelectorAll('[data-bind-text],[data-bind-html],[data-bind-currency],[data-bind-number],[data-bind-percent],[data-bind-src],[data-bind-href],[data-bind-bg-image],[data-bind-color],[data-bind-bg-color],[data-bind-border-color],[data-bind-show],[data-bind-hide],[data-bind-class]');
     for (var iCov = 0; iCov < allBound.length; iCov++) {
       var elCov = allBound[iCov];
