@@ -1,5 +1,43 @@
 'use strict';
 
+// ---------------------------------------------------------------------------
+// Fetch shim — intercepts fetch('data.json') for two purposes:
+//   1. Tier 2 srcdoc preview: when __skoop_dirty_data__ is set (injected by
+//      the configurator into the srcdoc <head>), return it directly so the
+//      page renders unsaved changes without an S3 round-trip.
+//   2. Normal S3 load: stash a Promise for the data.json response in
+//      __skoop_initial_data__ so the runtime can apply all data-bind-*
+//      bindings (including show/hide) automatically after init() finishes.
+// This shim is in skoop-live.js (not an inline <script>) so it is always
+// fresh on each deployment — no stale code risk from agent-copied HTML.
+// ---------------------------------------------------------------------------
+(function () {
+  var dirty = window.__skoop_dirty_data__;
+  var origFetch = window.fetch ? window.fetch.bind(window) : null;
+  window.fetch = function (input, init) {
+    try {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (/(^\.\/)?(data\.json)(\?.*)?$/.test(url) || /(^|\/)data\.json(\?.*)?$/.test(url)) {
+        if (dirty) {
+          window.__skoop_initial_data__ = Promise.resolve(dirty);
+          var body = JSON.stringify(dirty);
+          return Promise.resolve(new Response(body, {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }));
+        }
+        // Normal load: pass through and stash a promise that resolves with the data
+        var p = origFetch ? origFetch(input, init) : Promise.reject(new Error('fetch unavailable'));
+        window.__skoop_initial_data__ = p.then(function (response) {
+          return response.clone().json();
+        }).catch(function () { return null; });
+        return p;
+      }
+    } catch (e) {}
+    return origFetch ? origFetch(input, init) : Promise.reject(new Error('fetch unavailable'));
+  };
+})();
+
 /**
  * Skoop Live Preview Runtime
  *
@@ -438,64 +476,58 @@
     },
   };
 
-  // Apply on initial page load — runs after the page's own init() has built
-  // the DOM. Listens for DOMContentLoaded so it doesn't matter where this
-  // script is included relative to the page's main script.
+  // Apply on initial page load — two mechanisms depending on context:
+  //
+  // 1. Dirty data (srcdoc Tier 2 preview): __skoop_dirty_data__ is set before
+  //    the page's script runs, so apply it immediately.
+  //
+  // 2. Normal S3 load: the fetch shim stashes the data.json response in
+  //    __skoop_initial_data__. We watch #app-container for the '.loaded' class
+  //    (added by init() when it finishes building the DOM) and apply all
+  //    data-bind-* bindings at that point — including show/hide initial states.
+  //    This is automatic for every app without requiring any app code change.
   function applyFromInjectedOrFetch() {
     if (window.__skoop_dirty_data__) {
       window.SkoopLive.apply(window.__skoop_dirty_data__);
       return;
     }
-    // The page's own init() already fetched and applied data.json. We don't
-    // re-fetch here — bindings are applied on the existing DOM that init()
-    // built, using the same data the page already loaded. To do that we
-    // intercept the fetch and stash the result, OR we just wait for the
-    // page to set window.__skoop_data__ if it chooses to expose it. Most
-    // apps won't, so we no-op here on initial load — bindings are inert
-    // until the configurator sends a postMessage update.
-    //
-    // The only critical case is when dirty data is already set (preview
-    // reload via srcdoc), and that's handled above.
-  }
-
-  // After the page's own init() has built the DOM, report which data paths are
-  // wired to data-bind-show / data-bind-hide attributes to the parent builder.
-  // The builder uses this to decide whether a field change that *shows* an
-  // element needs a Tier 2 reload (because init() may have conditionally skipped
-  // setup for that element when the value was falsy).
-  // Sent on every page load — both the initial S3 load and each srcdoc reload.
-  function reportShowHidePaths() {
-    try {
-      if (window.parent && window.parent !== window) {
-        var showEls = document.querySelectorAll('[data-bind-show]');
-        var hideEls = document.querySelectorAll('[data-bind-hide]');
-        var showPaths = [];
-        var hidePaths = [];
-        for (var si = 0; si < showEls.length; si++) {
-          var sp = showEls[si].getAttribute('data-bind-show');
-          if (sp && showPaths.indexOf(sp) === -1) showPaths.push(sp);
-        }
-        for (var hi = 0; hi < hideEls.length; hi++) {
-          var hp = hideEls[hi].getAttribute('data-bind-hide');
-          if (hp && hidePaths.indexOf(hp) === -1) hidePaths.push(hp);
-        }
-        window.parent.postMessage({
-          type: 'skoop:show_hide_paths',
-          showPaths: showPaths,
-          hidePaths: hidePaths,
-        }, '*');
+    
+    function applyDataPromise() {
+      if (window.__skoop_initial_data__ && typeof window.__skoop_initial_data__.then === 'function') {
+        window.__skoop_initial_data__.then(function (data) {
+          if (data) window.SkoopLive.apply(data);
+        });
+      } else if (window.__skoop_initial_data__) {
+        window.SkoopLive.apply(window.__skoop_initial_data__);
       }
-    } catch (_) { /* cross-origin or no parent — skip */ }
+    }
+
+    // Watch for .loaded class on #app-container to auto-apply initial bindings
+    // once the app's async init() has finished building the DOM.
+    var appEl = document.getElementById('app-container');
+    if (!appEl) return;
+    // Already loaded (e.g. synchronous init)
+    if (appEl.classList.contains('loaded')) {
+      applyDataPromise();
+      return;
+    }
+    var loadedObs = new MutationObserver(function (mutations) {
+      for (var m = 0; m < mutations.length; m++) {
+        if (mutations[m].target.classList && mutations[m].target.classList.contains('loaded')) {
+          loadedObs.disconnect();
+          applyDataPromise();
+          return;
+        }
+      }
+    });
+    loadedObs.observe(appEl, { attributes: true, attributeFilter: ['class'] });
   }
 
   // Run after the page's main script has had a chance to build the DOM
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(function() { applyFromInjectedOrFetch(); reportShowHidePaths(); }, 0);
+    setTimeout(applyFromInjectedOrFetch, 0);
   } else {
-    document.addEventListener('DOMContentLoaded', function() {
-      applyFromInjectedOrFetch();
-      reportShowHidePaths();
-    });
+    document.addEventListener('DOMContentLoaded', applyFromInjectedOrFetch);
   }
 
   // Listen for postMessage updates from the parent configurator
