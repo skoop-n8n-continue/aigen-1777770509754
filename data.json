@@ -33,7 +33,7 @@
       "show_time": {
         "type": "boolean",
         "label": "Show Time",
-        "value": true
+        "value": false
       },
       "show_timezone": {
         "type": "boolean",
@@ -55,7 +55,7 @@
       "selected_timezone": {
         "type": "enum",
         "label": "Timezone",
-        "value": "Asia/Tokyo",
+        "value": "America/Los_Angeles",
         "meta": {
           "options": [
             "Local",
