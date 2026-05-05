@@ -33,12 +33,12 @@
       "show_time": {
         "type": "boolean",
         "label": "Show Time",
-        "value": false
+        "value": true
       },
       "show_timezone": {
         "type": "boolean",
         "label": "Show Timezone",
-        "value": true
+        "value": false
       },
       "timezone_format": {
         "type": "enum",
